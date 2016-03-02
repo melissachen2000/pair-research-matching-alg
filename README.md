@@ -1,9 +1,8 @@
 # pair-research-matching-alg
-# Computes maximal weighted matching on a graph
-# Used for pair research
-###################################
+Computes maximal weighted matching on a graph. Used for pair research.
 
-Instructions: python pairedresearch.py weights-test.txt
+
+! Instructions: python pairedresearch.py weights-test.txt
 
 
 Example:
