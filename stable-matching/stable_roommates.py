@@ -49,7 +49,12 @@ def stable_roommates(preferences):
 
     # check if holds are not empty
     if final_holds is not None:
-        return final_holds
+        # verification
+        if verify_matching(final_holds):
+            return final_holds
+        else:
+            print 'Stable matching is not possible. Failed at Verification: matching computed, but not valid.'
+            return None
     else:
         print 'Stable matching is not possible. Failed at Phase 2 reduction.'
         return None
@@ -107,13 +112,16 @@ def phase_1(preferences, ranks, curr_holds=None):
 
             # check if proposee has already been proposed to
             if proposee not in proposed_set:
+                # successful proposal
+                proposed_set.add(proposee)
+                break
+
+            # if all preferences are exhausted and proposee does not have anyone, stop
+            if curr_holds[proposer] >= len(preferences[proposer]):
                 break
 
             # if proposee is proposed to, reject proposee_hold and continue proposal with them
             proposer = proposee_hold
-
-        # successful proposal
-        proposed_set.add(proposee)
 
     # final holds from phase 1
     return holds
@@ -237,3 +245,31 @@ def phase_2_reduce(preferences, ranks, cycle):
         curr_cycle = find_all_or_nothing_cycle(p2_preferences, ranks, curr_holds)
 
     return curr_holds
+
+
+def verify_matching(matching):
+    """
+    Checks if a matching is valid.
+        Valid matchings have all people matched to one and only one person.
+
+    Input:
+        matching (dict): dict containing person:matching pairs
+
+    Return:
+        (boolean)): matching is valid
+    """
+    # validate matching
+    person_set = {person for person in matching.keys()}
+    matching_set = {match for match in matching.values()}
+
+    # equal cardinality and content
+    if person_set != matching_set:
+        return False
+
+    # check for a:b, then b:a
+    for person in matching:
+        if person != matching[matching[person]]:
+            return False
+
+    # matching is valid
+    return True
