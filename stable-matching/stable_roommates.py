@@ -51,7 +51,11 @@ def stable_roommates(preferences):
     if final_holds is not None:
         # verification
         if verify_matching(final_holds):
-            return final_holds
+            if verify_stability(final_holds, ranks):
+                return final_holds
+            else:
+                print 'Stable matching is not possible. Failed at Verification: matching computed, but not stable.'
+                return None
         else:
             print 'Stable matching is not possible. Failed at Verification: matching computed, but not valid.'
             return None
@@ -272,4 +276,41 @@ def verify_matching(matching):
             return False
 
     # matching is valid
+    return True
+
+
+def verify_stability(matching, ranks):
+    """
+    Checks if a valid matching (all people matched to one and only one person) is stable.
+        Stable iff no two unmatched members both prefer each other to their current partners in the matching.
+
+    Input:
+        matching (dict): dict containing person:matching pairs
+        ranks (dict of dict of ranking index): dict of persons with dicts indicating rank of each other person
+
+    Output:
+        (boolean): matching is stable
+    """
+    for x in matching:
+        for y in matching:
+            # ignore if x, y are the same or x, y are matched
+            if x == y or y == matching[x]:
+                continue
+
+            # get matching for x, y and corresponding ranks of matching
+            x_partner = matching[x]
+            y_partner = matching[y]
+
+            x_partner_rank = ranks[x][x_partner]
+            y_partner_rank = ranks[y][y_partner]
+
+            # get ranking of x -> y, y -> x
+            x_y_rank = ranks[x][y]
+            y_x_rank = ranks[y][x]
+
+            # if x prefers y to current partner and y prefers x to current partner, unstable
+            # prefer = lower ranking index since ranking is highest -> lowest preference
+            if x_y_rank < x_partner_rank and y_x_rank < y_partner_rank:
+                return False
+
     return True
