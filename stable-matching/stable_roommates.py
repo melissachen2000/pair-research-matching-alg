@@ -1,25 +1,30 @@
+from __future__ import print_function
+
 import random
 from copy import deepcopy
 
 
-def stable_roommates(preferences):
+def stable_roommates(preferences, debug=False):
     """
     Runs complete algorithm returns a stable matching, if exists.
 
     Input:
         preferences (matrix, list of lists): n-by-m preference matrix containing preferences for each person.
             m = n - 1, so each person has rated all other people.
+            Each row is a 1-indexed ordered ranking of others in the pool.
+            Thus, max(preferences[person]) <= number people and min(preferences[person]) = 1.
+        debug (boolean): including print statements
 
     Return:
         (list of tuples): stable matching, if exists. Otherwise, None.
     """
     # create a preference lookup table
     # person_number : [list of preferences]
-    preferences_dict = {str(x + 1): [str(y) for y in preferences[x]] for x in xrange(len(preferences))}
+    preferences_dict = {str(x + 1): [str(y) for y in preferences[x]] for x in range(len(preferences))}
 
     # create a dict of dicts holding index of each person ranked
     # person number : {person : rank_index }
-    ranks = {index: dict(zip(value, xrange(len(value)))) for index, value in preferences_dict.iteritems()}
+    ranks = {index: dict(zip(value, range(len(value)))) for index, value in preferences_dict.iteritems()}
 
     # phase 1: initial proposal
     p1_holds = phase_1(preferences_dict, ranks)
@@ -27,21 +32,48 @@ def stable_roommates(preferences):
     # if anyone does not have a hold, stable matching is not possible
     for hold in p1_holds:
         if p1_holds[hold] is None:
-            print 'Stable matching is not possible. Failed at Phase 1: not everyone was proposed to.'
+            if debug:
+                print('Stable matching is not possible. Failed at Phase 1: not everyone was proposed to.')
             return None
 
     # phase 1: reduction
     p1_reduced_preferences = phase_1_reduce(preferences_dict, ranks, p1_holds)
+
+    # phase 1: stable match halting condition
+    # if p1_reduced_preferences has only one preference per person, matching should be stable (lemma 2)
+    p1_halt = True
+    for person in p1_reduced_preferences:
+        if len(p1_reduced_preferences[person]) > 1:
+            p1_halt = False
+            break
+
+    if p1_halt:
+        # verification before returning
+        if verify_matching(p1_holds):
+            if verify_stability(p1_holds, ranks):
+                if debug:
+                    print('Stable matching found. Returning person : partner dictionary.')
+                return p1_holds
+            else:
+                if debug:
+                    print('Stable matching is not possible. Failed at Verification: matching computed, but not stable.')
+                return None
+        else:
+            if debug:
+                print('Stable matching is not possible. Failed at Verification: matching computed, but not valid.')
+            return None
 
     # phase 2: find an all-or-nothing cycle
     cycle = find_all_or_nothing_cycle(p1_reduced_preferences, ranks, p1_holds)
 
     # if cycle with more than size 3 does not exist, no stable matching exists
     if cycle is None:
-        print 'Stable matching is not possible. Failed at Phase 2: could not find an all-or-nothing cycle.'
+        if debug:
+            print('Stable matching is not possible. Failed at Phase 2: could not find an all-or-nothing cycle.')
         return None
     elif cycle is not None and len(cycle) == 3:
-        print 'Stable matching is not possible. Failed at Phase 2: could not find an all-or-nothing cycle len > 3.'
+        if debug:
+            print('Stable matching is not possible. Failed at Phase 2: could not find an all-or-nothing cycle len > 3.')
         return None
 
     # phase 2: reduction
@@ -52,15 +84,20 @@ def stable_roommates(preferences):
         # verification
         if verify_matching(final_holds):
             if verify_stability(final_holds, ranks):
+                if debug:
+                    print('Stable matching found. Returning person : partner dictionary.')
                 return final_holds
             else:
-                print 'Stable matching is not possible. Failed at Verification: matching computed, but not stable.'
+                if debug:
+                    print('Stable matching is not possible. Failed at Verification: matching computed, but not stable.')
                 return None
         else:
-            print 'Stable matching is not possible. Failed at Verification: matching computed, but not valid.'
+            if debug:
+                print('Stable matching is not possible. Failed at Verification: matching computed, but not valid.')
             return None
     else:
-        print 'Stable matching is not possible. Failed at Phase 2 reduction.'
+        if debug:
+            print('Stable matching is not possible. Failed at Phase 2 reduction.')
         return None
 
 
@@ -297,7 +334,7 @@ def verify_stability(matching, ranks):
             if x == y or y == matching[x]:
                 continue
 
-            # get matching for x, y and corresponding ranks of matching
+            # get partner under matching for x, y and corresponding ranks of matched partners
             x_partner = matching[x]
             y_partner = matching[y]
 
@@ -308,7 +345,7 @@ def verify_stability(matching, ranks):
             x_y_rank = ranks[x][y]
             y_x_rank = ranks[y][x]
 
-            # if x prefers y to current partner and y prefers x to current partner, unstable
+            # if x prefers y to current partner AND y prefers x to current partner, unstable
             # prefer = lower ranking index since ranking is highest -> lowest preference
             if x_y_rank < x_partner_rank and y_x_rank < y_partner_rank:
                 return False
