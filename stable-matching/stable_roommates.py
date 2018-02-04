@@ -1,9 +1,12 @@
-"""Stable Roommate Matching
+"""
+Stable Roommate Matching
 
 Implementation of Robert Irving's Stable Roommates Algorithm.
 http://www.dcs.gla.ac.uk/~pat/jchoco/roommates/papers/Comp_sdarticle.pdf
 """
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import print_function
 
 import random
@@ -41,7 +44,7 @@ def stable_roommates(preferences, debug=False):
 
     # create a dict of dicts holding index of each person ranked
     # person number : {person : rank_index }
-    ranks = {index: dict(zip(value, range(len(value)))) for index, value in preferences_dict.iteritems()}
+    ranks = {index: dict(zip(value, range(len(value)))) for (index, value) in preferences_dict.items()}
 
     # phase 1: initial proposal
     p1_holds = phase_1(preferences_dict, ranks)
@@ -156,7 +159,7 @@ def phase_1(preferences, ranks, curr_holds=None):
     Return:
         (dict): holds after condition (i) or (ii) is met.
     """
-    people = preferences.keys()
+    people = list(preferences.keys())
 
     # placeholder for holds
     holds = {person: None for person in people}
@@ -502,7 +505,7 @@ def format_output(matching):
     output = [0 for i in range(n)]
 
     # convert dict to output list
-    for key, value in matching.iteritems():
+    for (key, value) in matching.items():
         int_key = int(key) - 1
         int_value = int(value)
 
