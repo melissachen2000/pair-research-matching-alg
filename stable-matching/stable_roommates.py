@@ -16,8 +16,9 @@ def stable_roommates(preferences, debug=False):
         debug (boolean): including print statements
 
     Return:
-        (list of tuples): stable matching, if exists. Otherwise, None.
+        (list): stable matching, if exists. Otherwise, None.
             If a matching exists, -1 for a person indicates no partner.
+            ex: [2, 1, -1] (Person 0 matched with 2, 1 matched with 0, 2 not matched)
     """
     # validate input
     is_valid, person_added, valid_preferences = validate_input(preferences, debug)
@@ -70,7 +71,11 @@ def stable_roommates(preferences, debug=False):
 
                     del p1_holds[person_str]
                     p1_holds[person_added_match] = '-1'
-                return p1_holds
+
+                if debug:
+                    print(p1_holds)
+
+                return format_output(p1_holds)
             else:
                 if debug:
                     print('Stable matching is not possible. Failed at Verification: matching computed, but not stable.')
@@ -111,7 +116,11 @@ def stable_roommates(preferences, debug=False):
 
                     del final_holds[person_str]
                     final_holds[person_added_match] = '-1'
-                return final_holds
+
+                if debug:
+                    print(final_holds)
+
+                return format_output(final_holds)
             else:
                 if debug:
                     print('Stable matching is not possible. Failed at Verification: matching computed, but not stable.')
@@ -468,3 +477,28 @@ def verify_stability(matching, ranks):
                 return False
 
     return True
+
+
+def format_output(matching):
+    """
+    Formats holds into output that matches maximum weighted matching output.
+        ex: [2, 1, -1] (Person 0 matched with 2, 1 matched with 0, 2 not matched)
+
+    Input:
+        matching (dict): dict of persons who they are matched to (-1 if unmatched)
+
+    Return:
+        (list): stable matching, if exists. Otherwise, None.
+            If a matching exists, -1 for a person indicates no partner.
+    """
+    n = len(matching)
+    output = [0 for i in range(n)]
+
+    # convert dict to output list
+    for key, value in matching.iteritems():
+        int_key = int(key) - 1
+        int_value = int(value)
+
+        output[int_key] = int_value
+
+    return output
