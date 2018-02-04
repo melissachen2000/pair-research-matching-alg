@@ -6,21 +6,30 @@ from copy import deepcopy
 
 def stable_roommates(preferences, debug=False):
     """
-    Runs complete algorithm returns a stable matching, if exists.
+    Runs complete algorithm and returns a stable matching, if exists.
 
     Input:
-        preferences (matrix, list of lists): n-by-m preference matrix containing preferences for each person.
+        preferences (matrix, list of lists of numbers): n-by-m preference matrix containing preferences for each person.
             m = n - 1, so each person has rated all other people.
             Each row is a 1-indexed ordered ranking of others in the pool.
-            Thus, max(preferences[person]) <= number people and min(preferences[person]) = 1.
+            Therefore max(preferences[person]) <= number people and min(preferences[person]) = 1.
         debug (boolean): including print statements
 
     Return:
         (list of tuples): stable matching, if exists. Otherwise, None.
+            If a matching exists, -1 for a person indicates no partner.
     """
+    # validate input
+    is_valid, person_added, valid_preferences = validate_input(preferences, debug)
+
+    if not is_valid:
+        if debug:
+            print('Invalid input. Must be n-by-m (where m = n - 1) list of lists of numbers.')
+        return None
+
     # create a preference lookup table
     # person_number : [list of preferences]
-    preferences_dict = {str(x + 1): [str(y) for y in preferences[x]] for x in range(len(preferences))}
+    preferences_dict = {str(x + 1): [str(y) for y in valid_preferences[x]] for x in range(len(valid_preferences))}
 
     # create a dict of dicts holding index of each person ranked
     # person number : {person : rank_index }
@@ -53,6 +62,14 @@ def stable_roommates(preferences, debug=False):
             if verify_stability(p1_holds, ranks):
                 if debug:
                     print('Stable matching found. Returning person : partner dictionary.')
+
+                # check if person was added. if so, delete added person (n + 1) and set their match to -1
+                if person_added:
+                    person_str = str(len(p1_holds))
+                    person_added_match = p1_holds[person_str]
+
+                    del p1_holds[person_str]
+                    p1_holds[person_added_match] = '-1'
                 return p1_holds
             else:
                 if debug:
@@ -86,6 +103,14 @@ def stable_roommates(preferences, debug=False):
             if verify_stability(final_holds, ranks):
                 if debug:
                     print('Stable matching found. Returning person : partner dictionary.')
+
+                # check if person was added. if so, delete added person (n + 1) and set their match to -1
+                if person_added:
+                    person_str = str(len(final_holds))
+                    person_added_match = final_holds[person_str]
+
+                    del final_holds[person_str]
+                    final_holds[person_added_match] = '-1'
                 return final_holds
             else:
                 if debug:
@@ -223,7 +248,7 @@ def find_all_or_nothing_cycle(preferences, ranks, holds):
         holds (dict): dict of persons with current holds
 
     Return:
-        (list): cycle of users
+        (list): cycle of persons
     """
     # start with two individuals, p and q
     p = []
@@ -286,6 +311,98 @@ def phase_2_reduce(preferences, ranks, cycle):
         curr_cycle = find_all_or_nothing_cycle(p2_preferences, ranks, curr_holds)
 
     return curr_holds
+
+
+def validate_input(preference_matrix, debug=False):
+    """
+    Makes sure a preference matrix is n-by-m and m = n - 1.
+        If each isn't full, fill the list with the remaining people.
+        If n is odd, add in a n + 1 person to allow matching to run.
+
+
+    Input:
+        preferences (matrix, list of lists of numbers): n-by-m preference matrix containing preferences for each person.
+            m = n - 1, so each person has rated all other people.
+            Each row is a 1-indexed ordered ranking of others in the pool.
+            Therefore max(preferences[person]) <= number people and min(preferences[person]) = 1.
+
+    Return:
+        (boolean): if matrix is valid
+        (boolean): if n + 1 person was added
+        (matrix, list of lists numbers): filled and validated preference list
+    """
+    is_valid = False
+    person_added = False
+    output_matrix = deepcopy(preference_matrix)
+
+    n = len(output_matrix)
+    m = n - 1
+
+    matrix_iterator = range(n)
+
+    # validate list of lists of numbers
+    if type(output_matrix) is not list:
+        if debug:
+            print('Input validation failed: preference_matrix is not a list.')
+        return False, person_added, None
+
+    # validate size
+    if n <= 1:  # empty matrix or only 1 person (no point in matching)
+        if debug:
+            print('Input validation failed: preference_matrix must have size > 1')
+        return False, person_added, None
+
+    # validate content of matrix
+    for i in matrix_iterator:
+        sublist = output_matrix[i]
+
+        #  each sublist is a list
+        if type(sublist) is not list:
+            if debug:
+                print('Input validation failed: each list in preference_list should be a list.')
+            return False, person_added, None
+
+        # each preference list can only be of length m
+        if len(sublist) > m:
+            if debug:
+                print('Input validation failed: each list in preference_list cannot have length greater than m.')
+            return False, person_added, None
+
+        # each value is an int
+        for j in sublist:
+            if type(j) is not int:
+                if debug:
+                    print('Input validation failed: all values should be integers')
+                return False, person_added, None
+
+            # number should be between 1 and n and should be the person index
+            if j < 1 or j > n or j == (i + 1):
+                if debug:
+                    print('Input validation failed: each value in each row should be between \
+                          1 and n (number of people) and cannot be the person themselves')
+                return False, person_added, None
+
+    if debug:
+        print('Input validation passed.')
+    is_valid = True
+
+    # add n + 1 person if n is odd
+    if n % 2 != 0:
+        person_added = True
+        output_matrix += [range(1, n + 1)]
+
+    # fill any rows that are not of length m
+    full_set = set(range(1, n + 1))
+    for i in matrix_iterator:
+        if len(output_matrix[i]) != m:
+            to_add = full_set - set(output_matrix[i]) - {i + 1}
+            output_matrix[i] += list(to_add)
+
+        if person_added:
+            output_matrix[i] += [n + 1]
+
+    # returns is_valid (list of list of numbers), person_added (if n is odd), output_matrix (filled preference_matrix)
+    return is_valid, person_added, output_matrix
 
 
 def verify_matching(matching):
