@@ -14,9 +14,9 @@ import unittest
 from copy import deepcopy
 
 
-def stable_roommates(preferences, debug=False):
+def stable_matching_wrapper(preferences, handle_odd_method='add', debug=False):
     """
-    Runs complete algorithm and returns a stable matching, if exists.
+    Formats input and runs stable roommates algorithm, returning a stable matching if one exists.
 
     Input:
         preferences (matrix, list of lists of numbers): n-by-m preference matrix containing preferences for each person.
@@ -31,13 +31,19 @@ def stable_roommates(preferences, debug=False):
             ex: [2, 1, -1] (Person 0 matched with 2, 1 matched with 0, 2 not matched)
     """
     # validate input
-    is_valid, person_added, valid_preferences = validate_input(preferences, debug)
+    is_valid, valid_preferences = validate_input(preferences, debug=debug)
 
     if not is_valid:
         if debug:
             print('Invalid input. Must be n-by-m (where m = n - 1) list of lists of numbers.')
-        return None
+        return None, 'Invalid input. Must be n-by-m (where m = n - 1) list of lists of numbers.'
 
+    # handle cases where odd number of people
+    valid_preferences, is_odd, person_added, person_manipulated = handle_odd_users(valid_preferences,
+                                                                                   method=handle_odd_method,
+                                                                                   debug=False)
+
+    # TODO: if a person is removed, keep the original numeric mappings so people are matched up properly
     # create a preference lookup table
     # person_number : [list of preferences]
     preferences_dict = {str(x + 1): [str(y) for y in valid_preferences[x]] for x in range(len(valid_preferences))}
@@ -45,6 +51,29 @@ def stable_roommates(preferences, debug=False):
     # create a dict of dicts holding index of each person ranked
     # person number : {person : rank_index }
     ranks = {index: dict(zip(value, range(len(value)))) for (index, value) in preferences_dict.items()}
+
+    # run stable matching algorithm, and return results
+    return stable_matching(preferences_dict, ranks, is_odd, person_added, person_manipulated, debug=debug)
+
+
+def stable_matching(preferences_dict, ranks, is_odd, person_added, person_manipulated,  debug=False):
+    """
+    Given valid preference and ranking dictionaries, with odd cases handled, attempts to find a stable matching.
+
+    Input:
+        preferences_dict (dict of lists): dictionary of
+        debug (boolean): including print statements
+        is_odd (boolean): whether input was odd
+        person_added (boolean): whether odd is handled by adding a n + 1 person
+        person_manipulated (
+
+    Return:
+        (list): stable matching, if exists. Otherwise, None.
+            If a matching exists, -1 for a person indicates no partner.
+            ex: [2, 1, -1] (Person 0 matched with 2, 1 matched with 0, 2 not matched)
+    """
+    # TODO: add a special key such as -1 so that if dict.get('-1') returns false and a person was added
+    # (person added is not None) then you need to add the person back to the output before returning
 
     # phase 1: initial proposal
     p1_holds = phase_1(preferences_dict, ranks)
@@ -54,7 +83,7 @@ def stable_roommates(preferences, debug=False):
         if p1_holds[hold] is None:
             if debug:
                 print('Stable matching is not possible. Failed at Phase 1: not everyone was proposed to.')
-            return None
+            return None, 'Failed at Phase 1: not everyone was proposed to.'
 
     # phase 1: reduction
     p1_reduced_preferences = phase_1_reduce(preferences_dict, ranks, p1_holds)
@@ -85,28 +114,28 @@ def stable_roommates(preferences, debug=False):
                 if debug:
                     print(p1_holds)
 
-                return format_output(p1_holds)
+                return format_output(p1_holds), 'Stable matching found after Phase 1.'
             else:
                 if debug:
                     print('Stable matching is not possible. Failed at Verification: matching computed, but not stable.')
-                return None
+                return None, 'Failed at Verification after Phase 1: matching computed, but not stable.'
         else:
             if debug:
                 print('Stable matching is not possible. Failed at Verification: matching computed, but not valid.')
-            return None
+            return None, 'Failed at Verification after Phase 1: matching computed, but not valid.'
 
     # phase 2: find an all-or-nothing cycle
-    cycle = find_all_or_nothing_cycle(p1_reduced_preferences, ranks, p1_holds)
+    cycle = find_all_or_nothing_cycle(p1_reduced_preferences)
 
     # if cycle with more than size 3 does not exist, no stable matching exists
     if cycle is None:
         if debug:
             print('Stable matching is not possible. Failed at Phase 2: could not find an all-or-nothing cycle.')
-        return None
+        return None, 'Failed at Phase 2: could not find an all-or-nothing cycle.'
     elif cycle is not None and len(cycle) == 3:
         if debug:
             print('Stable matching is not possible. Failed at Phase 2: could not find an all-or-nothing cycle len > 3.')
-        return None
+        return None, 'Failed at Phase 2: could not find an all-or-nothing cycle len > 3.'
 
     # phase 2: reduction
     final_holds = phase_2_reduce(p1_reduced_preferences, ranks, cycle)
@@ -130,19 +159,19 @@ def stable_roommates(preferences, debug=False):
                 if debug:
                     print(final_holds)
 
-                return format_output(final_holds)
+                return format_output(final_holds), 'Stable matching found after Phase 2.'
             else:
                 if debug:
                     print('Stable matching is not possible. Failed at Verification: matching computed, but not stable.')
-                return None
+                return None, 'Failed at Verification after Phase 2: matching computed, but not stable.'
         else:
             if debug:
                 print('Stable matching is not possible. Failed at Verification: matching computed, but not valid.')
-            return None
+            return None, 'Failed at Verification after Phase 2: matching computed, but not valid.'
     else:
         if debug:
             print('Stable matching is not possible. Failed at Phase 2 reduction.')
-        return None
+        return None, 'Failed at Phase 2 reduction.'
 
 
 def phase_1(preferences, ranks, curr_holds=None):
@@ -257,14 +286,12 @@ def phase_1_reduce(preferences, ranks, holds):
     return reduced_preferences
 
 
-def find_all_or_nothing_cycle(preferences, ranks, holds):
+def find_all_or_nothing_cycle(preferences):
     """
     Finds an all-or-nothing cycle in reduced preferences, if exists.
 
     Input:
         preferences (dict of list of strings): dict of ordered preference lists {person : [ordered list]}
-        ranks (dict of dict of ranking index): dict of persons with dicts indicating rank of each other person
-        holds (dict): dict of persons with current holds
 
     Return:
         (list): cycle of persons
@@ -327,7 +354,7 @@ def phase_2_reduce(preferences, ranks, cycle):
         curr_holds = phase_1(p2_preferences, ranks, curr_preferences)
         p2_preferences = phase_1_reduce(p2_preferences, ranks, curr_holds)
 
-        curr_cycle = find_all_or_nothing_cycle(p2_preferences, ranks, curr_holds)
+        curr_cycle = find_all_or_nothing_cycle(p2_preferences)
 
     return curr_holds
 
@@ -336,22 +363,18 @@ def validate_input(preference_matrix, debug=False):
     """
     Makes sure a preference matrix is n-by-m and m = n - 1.
         If each isn't full, fill the list with the remaining people.
-        If n is odd, add in a n + 1 person to allow matching to run.
-
 
     Input:
         preferences (matrix, list of lists of numbers): n-by-m preference matrix containing preferences for each person.
             m = n - 1, so each person has rated all other people.
             Each row is a 1-indexed ordered ranking of others in the pool.
             Therefore max(preferences[person]) <= number people and min(preferences[person]) = 1.
+        debug (boolean): including print statements
 
     Return:
         (boolean): if matrix is valid
-        (boolean): if n + 1 person was added
         (matrix, list of lists numbers): filled and validated preference list
     """
-    is_valid = False
-    person_added = False
     output_matrix = deepcopy(preference_matrix)
 
     n = len(output_matrix)
@@ -363,13 +386,13 @@ def validate_input(preference_matrix, debug=False):
     if type(output_matrix) is not list:
         if debug:
             print('Input validation failed: preference_matrix is not a list.')
-        return False, person_added, None
+        return False, None
 
     # validate size
     if n <= 1:  # empty matrix or only 1 person (no point in matching)
         if debug:
             print('Input validation failed: preference_matrix must have size > 1')
-        return False, person_added, None
+        return False, None
 
     # validate content of matrix
     for i in matrix_iterator:
@@ -379,36 +402,27 @@ def validate_input(preference_matrix, debug=False):
         if type(sublist) is not list:
             if debug:
                 print('Input validation failed: each list in preference_list should be a list.')
-            return False, person_added, None
+            return False, None
 
         # each preference list can only be of length m
         if len(sublist) > m:
             if debug:
                 print('Input validation failed: each list in preference_list cannot have length greater than m.')
-            return False, person_added, None
+            return False, None
 
         # each value is an int
         for j in sublist:
             if type(j) is not int:
                 if debug:
                     print('Input validation failed: all values should be integers')
-                return False, person_added, None
+                return False, None
 
             # number should be between 1 and n and should be the person index
             if j < 1 or j > n or j == (i + 1):
                 if debug:
                     print('Input validation failed: each value in each row should be between \
                           1 and n (number of people) and cannot be the person themselves')
-                return False, person_added, None
-
-    if debug:
-        print('Input validation passed.')
-    is_valid = True
-
-    # add n + 1 person if n is odd
-    if n % 2 != 0:
-        person_added = True
-        output_matrix += [range(1, n + 1)]
+                return False, None
 
     # fill any rows that are not of length m
     full_set = set(range(1, n + 1))
@@ -417,11 +431,62 @@ def validate_input(preference_matrix, debug=False):
             to_add = full_set - set(output_matrix[i]) - {i + 1}
             output_matrix[i] += list(to_add)
 
-        if person_added:
-            output_matrix[i] += [n + 1]
-
     # returns is_valid (list of list of numbers), person_added (if n is odd), output_matrix (filled preference_matrix)
-    return is_valid, person_added, output_matrix
+    if debug:
+        print('Input validation passed.')
+    return True, output_matrix
+
+
+def handle_odd_users(preference_matrix, method='add', person_to_remove=None, debug=False):
+    """
+    Handles matching instances where there are an odd number of people by either adding or removing a person.
+
+    Inputs:
+        preference_matrix (matrix, list of lists of numbers): n-by-m matrix containing preferences for each person.
+            m = n - 1, so each person has rated all other people.
+            Each row is a 1-indexed ordered ranking of others in the pool.
+            Therefore max(preferences[person]) <= number people and min(preferences[person]) = 1.
+        method (string): method to handle odd case, either 'add' or 'remove'.
+        person_to_remove: if method 'remove' is specified, choose who to remove.
+        debug (boolean): including print statements
+
+    Return:
+        (matrix, list of lists numbers): manipulated preference matrix ready for matching
+        (boolean): whether matrix was odd
+        (boolean): whether person was added
+        (number): index of person who was manipulated in preference matrix, either added or removed
+    """
+    output_matrix = deepcopy(preference_matrix)
+
+    n = len(output_matrix)
+    m = n - 1
+
+    matrix_iterator = range(n)
+
+    # check if odd case must be handled
+    is_odd = False
+    person_added = False
+    person_manipulated = None
+
+    if n % 2 != 0:
+        is_odd = True
+        # handle based on method
+        if method == 'add':
+            person_added = True
+            output_matrix += [range(1, n + 1)]
+
+            # add new person to end of everyone's preference list
+            for i in matrix_iterator:
+                output_matrix[i] += [n + 1]
+        elif method == 'remove':
+            # TODO: implement removing person
+            if person_to_remove is None:
+                if debug:
+                    print('Error: method remove specified, but not given a person to remove.')
+                return False, None
+            person_added = False
+
+    return output_matrix, is_odd, person_added, person_manipulated
 
 
 def verify_matching(matching):
@@ -642,34 +707,40 @@ if __name__ == '__main__':
     # build and execute test cases
     class StableRoommatesTests(unittest.TestCase):
         def test_paper_matching(self):
-            print('Running test cases from Irving\'s paper where matching is possible...')
-            self.assertNotEqual(stable_roommates(paper_matching_6), None)
-            self.assertNotEqual(stable_roommates(paper_matching_8), None)
+            print('Running test cases from Irving\'s paper where matching is possible...', end='')
+            self.assertNotEqual(stable_matching_wrapper(paper_matching_6)[0], None)
+            self.assertNotEqual(stable_matching_wrapper(paper_matching_8)[0], None)
+            print('DONE.')
 
         def test_paper_no_matching(self):
-            print('Running test cases from Irving\'s paper where no matching is possible....')
-            self.assertEqual(stable_roommates(paper_no_matching_4), None)
-            self.assertEqual(stable_roommates(paper_no_matching_6), None)
+            print('Running test cases from Irving\'s paper where no matching is possible...', end='')
+            self.assertEqual(stable_matching_wrapper(paper_no_matching_4)[0], None)
+            self.assertEqual(stable_matching_wrapper(paper_no_matching_6)[0], None)
+            print('DONE.')
 
         def test_wiki_matching(self):
-            print('Running test cases from Stable Roommates Wikipedia article where no matching is possible....')
-            self.assertNotEqual(stable_roommates(wiki_matching_6), None)
+            print('Running test cases from Stable Roommates Wikipedia article where no matching is possible...', end='')
+            self.assertNotEqual(stable_matching_wrapper(wiki_matching_6)[0], None)
+            print('DONE.')
 
         def test_external_matching(self):
-            print('Running test cases from another implementation where matching is possible....')
-            self.assertNotEqual(stable_roommates(external_matching_8), None)
-            self.assertNotEqual(stable_roommates(external_matching_10), None)
-            self.assertNotEqual(stable_roommates(external_matching_20), None)
-            self.assertNotEqual(stable_roommates(external_matching_7), None)
+            print('Running test cases from another implementation where matching is possible...', end='')
+            self.assertNotEqual(stable_matching_wrapper(external_matching_8)[0], None)
+            self.assertNotEqual(stable_matching_wrapper(external_matching_10)[0], None)
+            self.assertNotEqual(stable_matching_wrapper(external_matching_20)[0], None)
+            self.assertNotEqual(stable_matching_wrapper(external_matching_7)[0], None)
+            print('DONE.')
 
         def test_custom_matching(self):
-            print('Running custom test cases where matching is possible....')
-            self.assertNotEqual(stable_roommates(custom_matching_2), None)
-            self.assertNotEqual(stable_roommates(custom_matching_3), None)
+            print('Running custom test cases where matching is possible...', end='')
+            self.assertNotEqual(stable_matching_wrapper(custom_matching_2)[0], None)
+            self.assertNotEqual(stable_matching_wrapper(custom_matching_3)[0], None)
+            print('DONE.')
 
         def test_custom_no_matching(self):
-            print('Running custom test cases where matching is possible....')
-            self.assertEqual(stable_roommates(custom_no_matching_empty), None)
-            self.assertEqual(stable_roommates(custom_no_matching_1), None)
+            print('Running custom test cases where matching is possible...', end='')
+            self.assertEqual(stable_matching_wrapper(custom_no_matching_empty)[0], None)
+            self.assertEqual(stable_matching_wrapper(custom_no_matching_1)[0], None)
+            print('DONE.')
 
     unittest.main()
