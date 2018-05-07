@@ -14,7 +14,7 @@ import unittest
 from copy import deepcopy
 
 
-def stable_matching_wrapper(preferences, handle_odd_method='add', debug=False):
+def stable_matching_wrapper(preferences, handle_odd_method='remove', remove_all=True, debug=False):
     """
     Formats input and runs stable roommates algorithm, returning a stable matching if one exists.
 
@@ -23,6 +23,8 @@ def stable_matching_wrapper(preferences, handle_odd_method='add', debug=False):
             m = n - 1, so each person has rated all other people.
             Each row is a 1-indexed ordered ranking of others in the pool.
             Therefore max(preferences[person]) <= number people and min(preferences[person]) = 1.
+        handle_odd_method (string): how to handle odd case, either by adding ('add') or removing ('remove') a user
+        remove_all (boolean): whether to try and remove other users if first removal doesn't give a stable matching.
         debug (boolean): including print statements
 
     Return:
@@ -38,25 +40,78 @@ def stable_matching_wrapper(preferences, handle_odd_method='add', debug=False):
             print('Invalid input. Must be n-by-m (where m = n - 1) list of lists of numbers.')
         return None, 'Invalid input. Must be n-by-m (where m = n - 1) list of lists of numbers.'
 
-    # handle cases where odd number of people
-    valid_preferences, is_odd, person_added, person_manipulated = handle_odd_users(valid_preferences,
-                                                                                   method=handle_odd_method,
-                                                                                   debug=False)
+    # handle odd and attempt matching
+    output = None
+    if handle_odd_method == 'add':
+        # handle cases where odd number of people
+        odd_handled_preferences, is_odd, person_added, person_manipulated = handle_odd_users(valid_preferences,
+                                                                                             method='add',
+                                                                                             debug=debug)
 
-    # TODO: if a person is removed, keep the original numeric mappings so people are matched up properly
-    # create a preference lookup table
-    # person_number : [list of preferences]
-    preferences_dict = {str(x + 1): [str(y) for y in valid_preferences[x]] for x in range(len(valid_preferences))}
+        # create a preference lookup table
+        # person_number : [list of preferences]
+        preferences_dict = {
+            str(x + 1): [str(y) for y in odd_handled_preferences[x]] for x in range(len(odd_handled_preferences))
+        }
 
-    # create a dict of dicts holding index of each person ranked
-    # person number : {person : rank_index }
-    ranks = {index: dict(zip(value, range(len(value)))) for (index, value) in preferences_dict.items()}
+        # create a dict of dicts holding index of each person ranked
+        # person number : {person : rank_index }
+        ranks = {index: dict(zip(value, range(len(value)))) for (index, value) in preferences_dict.items()}
 
-    # run stable matching algorithm, and return results
-    return stable_matching(preferences_dict, ranks, is_odd, person_added, person_manipulated, debug=debug)
+        # run stable matching once with added user
+        output = stable_matching(preferences_dict, ranks, is_odd, person_added, person_manipulated, debug=debug)
+    elif handle_odd_method == 'remove':
+        # randomly pick a user to remove
+        randomized_users = [x for x in range(len(valid_preferences))]
+        random.seed(42)
+        random.shuffle(randomized_users)
+
+        # if remove_all, randomly try to remove one user at a time and see if a stable matching can be found.
+        # else, only remove one and attempt to find a matching
+        if not remove_all:
+            randomized_users = [randomized_users[0]]
+
+        for i in randomized_users:
+            odd_handled_preferences, is_odd, person_added, person_manipulated = handle_odd_users(valid_preferences,
+                                                                                                 method='remove',
+                                                                                                 person_to_remove=i,
+                                                                                                 debug=debug)
+
+            # create a preference lookup table
+            # person_number : [list of preferences]
+            preferences_dict = {}
+            index = 0
+
+            for current_person in range(1, len(valid_preferences) + 1):
+                # add user to preference_dict if they have not been removed
+                if current_person != person_manipulated:
+                    preferences_dict[str(current_person)] = [str(y) for y in odd_handled_preferences[index]]
+                    index += 1
+
+            # create a dict of dicts holding index of each person ranked
+            # person number : {person : rank_index }
+            ranks = {index: dict(zip(value, range(len(value)))) for (index, value) in preferences_dict.items()}
+
+            if debug:
+                print('Preference Dict: {}'.format(preferences_dict))
+                print('Ranks Dict: {}'.format(ranks))
+
+            # run stable matching once with added user
+            output = stable_matching(preferences_dict, ranks, is_odd, person_added, person_manipulated, debug=debug)
+
+            # return output if matching is stable or if no stable matching and even number of users
+            if (output[0] is not None) or (output[0] is None and not is_odd):
+                return output
+    else:
+        if debug:
+            print('Invalid input. handle_odd_method must either be \'add\' or \'remove\'')
+        return None, 'Invalid input. handle_odd_method must either be \'add\' or \'remove\''
+
+    # return results
+    return output
 
 
-def stable_matching(preferences_dict, ranks, is_odd, person_added, person_manipulated,  debug=False):
+def stable_matching(preferences_dict, ranks, is_odd, person_added, person_manipulated, debug=False):
     """
     Given valid preference and ranking dictionaries, with odd cases handled, attempts to find a stable matching.
 
@@ -72,9 +127,6 @@ def stable_matching(preferences_dict, ranks, is_odd, person_added, person_manipu
             If a matching exists, -1 for a person indicates no partner.
             ex: [2, 1, -1] (Person 0 matched with 2, 1 matched with 0, 2 not matched)
     """
-    # TODO: add a special key such as -1 so that if dict.get('-1') returns false and a person was added
-    # (person added is not None) then you need to add the person back to the output before returning
-
     # phase 1: initial proposal
     p1_holds = phase_1(preferences_dict, ranks)
 
@@ -103,13 +155,19 @@ def stable_matching(preferences_dict, ranks, is_odd, person_added, person_manipu
                 if debug:
                     print('Stable matching found. Returning person : partner dictionary.')
 
-                # check if person was added. if so, delete added person (n + 1) and set their match to -1
-                if person_added:
-                    person_str = str(len(p1_holds))
-                    person_added_match = p1_holds[person_str]
+                # handle odd cases where person may have been added or removed
+                if is_odd:
+                    # person added: delete added person (n + 1) and set their match to -1
+                    if person_added:
+                        person_str = str(len(p1_holds))
+                        person_added_match = p1_holds[person_str]
 
-                    del p1_holds[person_str]
-                    p1_holds[person_added_match] = '-1'
+                        del p1_holds[person_str]
+                        p1_holds[person_added_match] = '-1'
+                    # person removed: add person with -1 as hold value
+                    elif person_manipulated is not None:
+                        person_str = str(person_manipulated)
+                        p1_holds[person_str] = '-1'
 
                 if debug:
                     print(p1_holds)
@@ -118,10 +176,12 @@ def stable_matching(preferences_dict, ranks, is_odd, person_added, person_manipu
             else:
                 if debug:
                     print('Stable matching is not possible. Failed at Verification: matching computed, but not stable.')
+                    print(p1_holds)
                 return None, 'Failed at Verification after Phase 1: matching computed, but not stable.'
         else:
             if debug:
                 print('Stable matching is not possible. Failed at Verification: matching computed, but not valid.')
+                print(p1_holds)
             return None, 'Failed at Verification after Phase 1: matching computed, but not valid.'
 
     # phase 2: find an all-or-nothing cycle
@@ -148,13 +208,17 @@ def stable_matching(preferences_dict, ranks, is_odd, person_added, person_manipu
                 if debug:
                     print('Stable matching found. Returning person : partner dictionary.')
 
-                # check if person was added. if so, delete added person (n + 1) and set their match to -1
-                if person_added:
-                    person_str = str(len(final_holds))
-                    person_added_match = final_holds[person_str]
+                # handle odd cases where person may have been added or removed
+                if is_odd:
+                    if person_added:  # person added: delete added person (n + 1) and set their match to -1
+                        person_str = str(len(final_holds))
+                        person_added_match = final_holds[person_str]
 
-                    del final_holds[person_str]
-                    final_holds[person_added_match] = '-1'
+                        del final_holds[person_str]
+                        final_holds[person_added_match] = '-1'
+                    elif person_manipulated is not None:  # person removed: add person with -1 as hold value
+                        person_str = str(person_manipulated)
+                        final_holds[person_str] = '-1'
 
                 if debug:
                     print(final_holds)
@@ -163,10 +227,12 @@ def stable_matching(preferences_dict, ranks, is_odd, person_added, person_manipu
             else:
                 if debug:
                     print('Stable matching is not possible. Failed at Verification: matching computed, but not stable.')
+                    print(final_holds)
                 return None, 'Failed at Verification after Phase 2: matching computed, but not stable.'
         else:
             if debug:
                 print('Stable matching is not possible. Failed at Verification: matching computed, but not valid.')
+                print(final_holds)
             return None, 'Failed at Verification after Phase 2: matching computed, but not valid.'
     else:
         if debug:
@@ -196,9 +262,6 @@ def phase_1(preferences, ranks, curr_holds=None):
     # during phase 1, no holds exist. initialize curr_holds to 0 (all people are > 0)
     if curr_holds is None:
         curr_holds = {person: 0 for person in people}
-
-    # randomize ordering of proposal
-    random.shuffle(people)
 
     # track people who are already proposed to
     proposed_set = set()
@@ -437,7 +500,7 @@ def validate_input(preference_matrix, debug=False):
     return True, output_matrix
 
 
-def handle_odd_users(preference_matrix, method='add', person_to_remove=None, debug=False):
+def handle_odd_users(preference_matrix, method='remove', person_to_remove=None, debug=False):
     """
     Handles matching instances where there are an odd number of people by either adding or removing a person.
 
@@ -447,19 +510,19 @@ def handle_odd_users(preference_matrix, method='add', person_to_remove=None, deb
             Each row is a 1-indexed ordered ranking of others in the pool.
             Therefore max(preferences[person]) <= number people and min(preferences[person]) = 1.
         method (string): method to handle odd case, either 'add' or 'remove'.
-        person_to_remove: if method 'remove' is specified, choose who to remove.
+        person_to_remove (number): if method 'remove' is specified, choose who to remove.
+            Number corresponds to 0-indexed array element in the preference_matrix
         debug (boolean): including print statements
 
     Return:
         (matrix, list of lists numbers): manipulated preference matrix ready for matching
         (boolean): whether matrix was odd
         (boolean): whether person was added
-        (number): index of person who was manipulated in preference matrix, either added or removed
+        (number): index of person who was manipulated in preference matrix, either added or removed, as 1-indexed number
     """
     output_matrix = deepcopy(preference_matrix)
 
     n = len(output_matrix)
-    m = n - 1
 
     matrix_iterator = range(n)
 
@@ -470,7 +533,8 @@ def handle_odd_users(preference_matrix, method='add', person_to_remove=None, deb
 
     if n % 2 != 0:
         is_odd = True
-        # handle based on method
+
+        # handle based on odd-handling method
         if method == 'add':
             person_added = True
             output_matrix += [range(1, n + 1)]
@@ -479,12 +543,29 @@ def handle_odd_users(preference_matrix, method='add', person_to_remove=None, deb
             for i in matrix_iterator:
                 output_matrix[i] += [n + 1]
         elif method == 'remove':
-            # TODO: implement removing person
             if person_to_remove is None:
                 if debug:
                     print('Error: method remove specified, but not given a person to remove.')
                 return False, None
+
+            # preferences are 1-indexed so increment person_to_remove
+            person_to_remove_one_indexed = person_to_remove + 1
+
+            if debug:
+                print('Removing person {} (matrix index), {} (dict index)'.format(person_to_remove,
+                                                                                  person_to_remove + 1))
+
+            # remove person_to_remove from everyone else's preferences
+            for i in matrix_iterator:
+                if person_to_remove_one_indexed in output_matrix[i]:
+                    output_matrix[i].remove(person_to_remove_one_indexed)
+
+            # remove all preferences for person_to_remove
+            del output_matrix[person_to_remove]
+
+            # set variables
             person_added = False
+            person_manipulated = person_to_remove + 1
 
     return output_matrix, is_odd, person_added, person_manipulated
 
@@ -567,7 +648,7 @@ def format_output(matching):
             If a matching exists, -1 for a person indicates no partner.
     """
     n = len(matching)
-    output = [0 for i in range(n)]
+    output = [0] * n
 
     # convert dict to output list
     for (key, value) in matching.items():
@@ -706,41 +787,94 @@ if __name__ == '__main__':
 
     # build and execute test cases
     class StableRoommatesTests(unittest.TestCase):
+        handle_odd_method = 'remove'
+
         def test_paper_matching(self):
             print('Running test cases from Irving\'s paper where matching is possible...', end='')
-            self.assertNotEqual(stable_matching_wrapper(paper_matching_6)[0], None)
-            self.assertNotEqual(stable_matching_wrapper(paper_matching_8)[0], None)
+            res_paper_matching_6 = stable_matching_wrapper(paper_matching_6, handle_odd_method=self.handle_odd_method)
+            res_paper_matching_8 = stable_matching_wrapper(paper_matching_8, handle_odd_method=self.handle_odd_method)
+
+            # all cases should have a valid matching with corresponding match lengths
+            self.assertNotEqual(res_paper_matching_6[0], None)
+            self.assertEqual(len(res_paper_matching_6[0]), 6)
+
+            self.assertNotEqual(res_paper_matching_8[0], None)
+            self.assertEqual(len(res_paper_matching_8[0]), 8)
+
             print('DONE.')
 
         def test_paper_no_matching(self):
             print('Running test cases from Irving\'s paper where no matching is possible...', end='')
-            self.assertEqual(stable_matching_wrapper(paper_no_matching_4)[0], None)
-            self.assertEqual(stable_matching_wrapper(paper_no_matching_6)[0], None)
+            res_paper_no_matching_4 = stable_matching_wrapper(paper_no_matching_4,
+                                                              handle_odd_method=self.handle_odd_method)
+            res_paper_no_matching_6 = stable_matching_wrapper(paper_no_matching_6,
+                                                              handle_odd_method=self.handle_odd_method)
+
+            # all cases should NOT have a matching
+            self.assertEqual(res_paper_no_matching_4[0], None)
+            self.assertEqual(res_paper_no_matching_6[0], None)
+
             print('DONE.')
 
         def test_wiki_matching(self):
-            print('Running test cases from Stable Roommates Wikipedia article where no matching is possible...', end='')
-            self.assertNotEqual(stable_matching_wrapper(wiki_matching_6)[0], None)
+            print('Running test cases from Stable Roommates Wikipedia article matching is possible...', end='')
+            res_wiki_matching_6 = stable_matching_wrapper(wiki_matching_6, handle_odd_method=self.handle_odd_method)
+
+            # case should have a matching of length 6
+            self.assertNotEqual(res_wiki_matching_6[0], None)
+            self.assertEqual(len(res_wiki_matching_6[0]), 6)
+
             print('DONE.')
 
         def test_external_matching(self):
             print('Running test cases from another implementation where matching is possible...', end='')
-            self.assertNotEqual(stable_matching_wrapper(external_matching_8)[0], None)
-            self.assertNotEqual(stable_matching_wrapper(external_matching_10)[0], None)
-            self.assertNotEqual(stable_matching_wrapper(external_matching_20)[0], None)
-            self.assertNotEqual(stable_matching_wrapper(external_matching_7)[0], None)
+            res_external_matching_8 = stable_matching_wrapper(external_matching_8,
+                                                              handle_odd_method=self.handle_odd_method)
+            res_external_matching_10 = stable_matching_wrapper(external_matching_10,
+                                                               handle_odd_method=self.handle_odd_method)
+            res_external_matching_20 = stable_matching_wrapper(external_matching_20,
+                                                               handle_odd_method=self.handle_odd_method)
+            res_external_matching_7 = stable_matching_wrapper(external_matching_7,
+                                                              handle_odd_method=self.handle_odd_method)
+
+            # all cases should have a valid matching with corresponding match lengths
+            self.assertNotEqual(res_external_matching_8[0], None)
+            self.assertEqual(len(res_external_matching_8[0]), 8)
+
+            self.assertNotEqual(res_external_matching_10[0], None)
+            self.assertEqual(len(res_external_matching_10[0]), 10)
+
+            self.assertNotEqual(res_external_matching_20[0], None)
+            self.assertEqual(len(res_external_matching_20[0]), 20)
+
+            self.assertNotEqual(res_external_matching_7[0], None)
+            self.assertEqual(len(res_external_matching_7[0]), 7)
+
             print('DONE.')
 
         def test_custom_matching(self):
             print('Running custom test cases where matching is possible...', end='')
-            self.assertNotEqual(stable_matching_wrapper(custom_matching_2)[0], None)
-            self.assertNotEqual(stable_matching_wrapper(custom_matching_3)[0], None)
+            res_custom_matching_2 = stable_matching_wrapper(custom_matching_2, handle_odd_method=self.handle_odd_method)
+            res_custom_matching_3 = stable_matching_wrapper(custom_matching_3, handle_odd_method=self.handle_odd_method)
+
+            # all cases should have a valid matching with corresponding match lengths
+            self.assertNotEqual(res_custom_matching_2[0], None)
+            self.assertEqual(len(res_custom_matching_2[0]), 2)
+
+            self.assertNotEqual(res_custom_matching_3[0], None)
+            self.assertEqual(len(res_custom_matching_3[0]), 3)
             print('DONE.')
 
         def test_custom_no_matching(self):
             print('Running custom test cases where matching is possible...', end='')
-            self.assertEqual(stable_matching_wrapper(custom_no_matching_empty)[0], None)
-            self.assertEqual(stable_matching_wrapper(custom_no_matching_1)[0], None)
+            res_custom_no_matching_empty = stable_matching_wrapper(custom_no_matching_empty,
+                                                                   handle_odd_method=self.handle_odd_method)
+            res_custom_no_matching_1 = stable_matching_wrapper(custom_no_matching_1,
+                                                               handle_odd_method=self.handle_odd_method)
+
+            # all cases should NOT have a matching
+            self.assertEqual(res_custom_no_matching_empty[0], None)
+            self.assertEqual(res_custom_no_matching_1[0], None)
             print('DONE.')
 
     unittest.main()
