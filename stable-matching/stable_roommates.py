@@ -637,14 +637,14 @@ def verify_stability(matching, ranks):
 
 def format_output(matching):
     """
-    Formats holds into output that matches maximum weighted matching output.
-        ex: [2, 1, -1] (Person 0 matched with 2, 1 matched with 0, 2 not matched)
+    Formats output into list with 0-indexed mapping.
+        ex: [1, 0, -1] (Person 0 matched with 1, 1 matched with 0, 2 not matched)
 
     Input:
         matching (dict): dict of persons who they are matched to (-1 if unmatched)
 
     Return:
-        (list): stable matching, if exists. Otherwise, None.
+        (list): formatted stable matching, with 0-indexed numbers
             If a matching exists, -1 for a person indicates no partner.
     """
     n = len(matching)
@@ -652,8 +652,9 @@ def format_output(matching):
 
     # convert dict to output list
     for (key, value) in matching.items():
+        # 0-index key and value
         int_key = int(key) - 1
-        int_value = int(value)
+        int_value = int(value) - 1 if int(value) > 0 else -1
 
         output[int_key] = int_value
 
@@ -785,49 +786,73 @@ if __name__ == '__main__':
         [1, 2]
     ]
 
+
     # build and execute test cases
     class StableRoommatesTests(unittest.TestCase):
         handle_odd_method = 'remove'
 
-        def test_paper_matching(self):
-            print('Running test cases from Irving\'s paper where matching is possible...', end='')
+        def test0_input_checking(self):
+            print('Input checking test cases where failure should occur before beginning matching algorithm...', end='')
+            res_custom_no_matching_empty = stable_matching_wrapper(custom_no_matching_empty,
+                                                                   handle_odd_method=self.handle_odd_method)
+            res_custom_no_matching_1 = stable_matching_wrapper(custom_no_matching_1,
+                                                               handle_odd_method=self.handle_odd_method)
+
+            # custom_no_matching_empty should have no matching and fail at input validation
+            self.assertEqual(res_custom_no_matching_empty[0], None)
+            self.assertEqual(res_custom_no_matching_empty[1],
+                             'Invalid input. Must be n-by-m (where m = n - 1) list of lists of numbers.')
+
+            # custom_no_matching_1 should have no matching and fail at input validation
+            self.assertEqual(res_custom_no_matching_1[0], None)
+            self.assertEqual(res_custom_no_matching_1[1],
+                             'Invalid input. Must be n-by-m (where m = n - 1) list of lists of numbers.')
+
+            print('SUCCESS.')
+
+        def test1_paper_matching(self):
+            print('Test cases from Irving\'s paper where matching is possible...', end='')
             res_paper_matching_6 = stable_matching_wrapper(paper_matching_6, handle_odd_method=self.handle_odd_method)
             res_paper_matching_8 = stable_matching_wrapper(paper_matching_8, handle_odd_method=self.handle_odd_method)
 
-            # all cases should have a valid matching with corresponding match lengths
+            # paper_matching_6 should match with length 6 and contain 0-5
             self.assertNotEqual(res_paper_matching_6[0], None)
             self.assertEqual(len(res_paper_matching_6[0]), 6)
+            self.assertEqual(set(res_paper_matching_6[0]), set(range(6)))
 
+            # paper_matching_8 should match with length 8 and contain 0-7
             self.assertNotEqual(res_paper_matching_8[0], None)
             self.assertEqual(len(res_paper_matching_8[0]), 8)
+            self.assertEqual(set(res_paper_matching_8[0]), set(range(8)))
 
-            print('DONE.')
+            print('SUCCESS.')
 
-        def test_paper_no_matching(self):
-            print('Running test cases from Irving\'s paper where no matching is possible...', end='')
+        def test2_paper_no_matching(self):
+            print('Test cases from Irving\'s paper where no matching is possible...', end='')
             res_paper_no_matching_4 = stable_matching_wrapper(paper_no_matching_4,
                                                               handle_odd_method=self.handle_odd_method)
             res_paper_no_matching_6 = stable_matching_wrapper(paper_no_matching_6,
                                                               handle_odd_method=self.handle_odd_method)
 
-            # all cases should NOT have a matching
+            # matching should FAIL for both cases
             self.assertEqual(res_paper_no_matching_4[0], None)
             self.assertEqual(res_paper_no_matching_6[0], None)
 
-            print('DONE.')
+            print('SUCCESS.')
 
-        def test_wiki_matching(self):
-            print('Running test cases from Stable Roommates Wikipedia article matching is possible...', end='')
+        def test3_wiki_matching(self):
+            print('Test cases from Stable Roommates Wikipedia article where matching is possible...', end='')
             res_wiki_matching_6 = stable_matching_wrapper(wiki_matching_6, handle_odd_method=self.handle_odd_method)
 
-            # case should have a matching of length 6
+            # paper_matching_6 should match with length 6 and contain 0-5
             self.assertNotEqual(res_wiki_matching_6[0], None)
             self.assertEqual(len(res_wiki_matching_6[0]), 6)
+            self.assertEqual(set(res_wiki_matching_6[0]), set(range(6)))
 
-            print('DONE.')
+            print('SUCCESS.')
 
-        def test_external_matching(self):
-            print('Running test cases from another implementation where matching is possible...', end='')
+        def test4_external_matching(self):
+            print('Test cases from another implementation where matching is possible...', end='')
             res_external_matching_8 = stable_matching_wrapper(external_matching_8,
                                                               handle_odd_method=self.handle_odd_method)
             res_external_matching_10 = stable_matching_wrapper(external_matching_10,
@@ -837,44 +862,43 @@ if __name__ == '__main__':
             res_external_matching_7 = stable_matching_wrapper(external_matching_7,
                                                               handle_odd_method=self.handle_odd_method)
 
-            # all cases should have a valid matching with corresponding match lengths
+            # paper_matching_8 should match with length 8 and contain 0-7
             self.assertNotEqual(res_external_matching_8[0], None)
             self.assertEqual(len(res_external_matching_8[0]), 8)
+            self.assertEqual(set(res_external_matching_8[0]), set(range(8)))
 
+            # paper_matching_10 should match with length 10 and contain 0-9
             self.assertNotEqual(res_external_matching_10[0], None)
             self.assertEqual(len(res_external_matching_10[0]), 10)
+            self.assertEqual(set(res_external_matching_10[0]), set(range(10)))
 
+            # paper_matching_20 should match with length 20 and contain 0-19
             self.assertNotEqual(res_external_matching_20[0], None)
             self.assertEqual(len(res_external_matching_20[0]), 20)
+            self.assertEqual(set(res_external_matching_20[0]), set(range(20)))
 
+            # paper_matching_7 should match with length 7 and not having a matching for user 7
             self.assertNotEqual(res_external_matching_7[0], None)
             self.assertEqual(len(res_external_matching_7[0]), 7)
+            self.assertEqual(res_external_matching_7[0][6], -1)
 
-            print('DONE.')
+            print('SUCCESS.')
 
-        def test_custom_matching(self):
-            print('Running custom test cases where matching is possible...', end='')
+        def test5_custom_matching(self):
+            print('Custom test cases where matching is possible...', end='')
             res_custom_matching_2 = stable_matching_wrapper(custom_matching_2, handle_odd_method=self.handle_odd_method)
             res_custom_matching_3 = stable_matching_wrapper(custom_matching_3, handle_odd_method=self.handle_odd_method)
 
-            # all cases should have a valid matching with corresponding match lengths
+            # custom_matching_2 should match with length 2 and contain 0-1
             self.assertNotEqual(res_custom_matching_2[0], None)
             self.assertEqual(len(res_custom_matching_2[0]), 2)
+            self.assertEqual(set(res_custom_matching_2[0]), set(range(2)))
 
+            # custom_matching_3 should match with length 3 and not have a matching for user 2
             self.assertNotEqual(res_custom_matching_3[0], None)
             self.assertEqual(len(res_custom_matching_3[0]), 3)
-            print('DONE.')
+            self.assertEqual(res_custom_matching_3[0][1], -1)
 
-        def test_custom_no_matching(self):
-            print('Running custom test cases where matching is possible...', end='')
-            res_custom_no_matching_empty = stable_matching_wrapper(custom_no_matching_empty,
-                                                                   handle_odd_method=self.handle_odd_method)
-            res_custom_no_matching_1 = stable_matching_wrapper(custom_no_matching_1,
-                                                               handle_odd_method=self.handle_odd_method)
-
-            # all cases should NOT have a matching
-            self.assertEqual(res_custom_no_matching_empty[0], None)
-            self.assertEqual(res_custom_no_matching_1[0], None)
-            print('DONE.')
+            print('SUCCESS.')
 
     unittest.main()
