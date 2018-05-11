@@ -661,6 +661,29 @@ def format_output(matching):
     return output
 
 
+def create_preference_matrix(weighted_matrix):
+    """
+    Helper function that converts an n^2 weighted matrix into a n-by-m preference matrix (where m = n - 1).
+
+    Input:
+        weighted_matrix (list of list of numbers): matrix of weighted affinities
+
+    Return:
+        (list of list of numbers): preference matrix where each list is ordered list of person indices.
+    """
+    # create zipped lists of (index, rating)
+    preference_matrix = [[(i + 1, value) for i, value in enumerate(x)] for x in weighted_matrix]
+
+    # format each row
+    for index, curr_person in enumerate(preference_matrix):
+        curr_person.sort(key=lambda tup: tup[1], reverse=True)
+
+        # add sorted preference list without self
+        preference_matrix[index] = [person_rating[0] for person_rating in curr_person if person_rating[0] - 1 != index]
+
+    return preference_matrix
+
+
 # unit tests
 if __name__ == '__main__':
     # from http://www.dcs.gla.ac.uk/~pat/jchoco/roommates/papers/Comp_sdarticle.pdf
