@@ -672,7 +672,7 @@ def create_preference_matrix(weighted_matrix):
         (list of list of numbers): preference matrix where each list is ordered list of person indices.
     """
     # create zipped lists of (index, rating)
-    preference_matrix = [[(i + 1, value) for i, value in enumerate(x)] for x in weighted_matrix]
+    preference_matrix = [[(index + 1, rating) for index, rating in enumerate(x)] for x in weighted_matrix]
 
     # format each row
     for index, curr_person in enumerate(preference_matrix):
@@ -808,7 +808,6 @@ if __name__ == '__main__':
         [3, 1],
         [1, 2]
     ]
-
 
     # build and execute test cases
     class StableRoommatesTests(unittest.TestCase):
