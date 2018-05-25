@@ -3,16 +3,17 @@ This repository includes two matching algorithms that are used for Pair Research
 1. Stable Roommates Matching
 2. Maximum Weighted Matching
 
-## Development
+## Development and Analysis
 We use [pipenv](https://github.com/pypa/pipenv) for managing package dependencies.
 
 1. Install pipenv using the link above.
 2. Run `pipenv install` to install package dependencies and `pipenv shell` to start virtual environment with installed dependencies.
+3. Run `jupyter notebook` to start a notebook server. Analysis notebooks are contained in the `analysis/` directory.
 
 
 ## Usage
 ```
-python pairedresearch.py weights-test.txt
+cat input.json | python pair_research.py
 ```
 
 Example:
