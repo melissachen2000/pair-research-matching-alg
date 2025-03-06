@@ -1,8 +1,14 @@
 
 import pandas as pd
 from pair_research import create_matching_output
+import argparse
 
-ratings = pd.read_csv('ratings.csv')
+argparser = argparse.ArgumentParser()
+argparser.add_argument("--ratings_filename", required=True)
+
+args = argparser.parse_args()
+
+ratings = pd.read_csv(f'{args.ratings_filename}.csv')
 requests = pd.read_csv('help_requests.csv')
 
 request_to_uuid = {

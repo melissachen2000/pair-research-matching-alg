@@ -19,8 +19,9 @@ Note: for all python commands listed below, they might be run using `python3` in
 2. Create a new virtual environment by running `python -m venv pr_venv`, activate it with `source pr_venv/bin/activate` and install the packages with `pip install -r requirements.txt`
 3. Send out the pair research help request form to the participants. 
 4. Once they are done submitting requests, link the results to a spreadsheet (DO NOT do this beforehand) and download the results as a CSV. Name this file `help_requests.csv` and move it to the root folder of the repository. 
-5. Run `python hacky_generate_form.py` from the command line. The output will be `help_requests.txt`. Copy the contents of this file.
-6. Open the Pair Requests Rating google form. Edit the last question such that each row is a help request. You should be able to do this by clicking on the filler text ("Row 1"), deleting it, then pasting what you copied from the txt file. The formatting should handle itself such that each row is one help request.
+5. Run `python hacky_generate_form.py` from the command line. The output will be `help_requests.txt`. For each group, do the following:
+    1. Copy the list of names and help requests under each group heading.
+    2. Make a copy of the Pair Requests Rating google form. Edit the last question such that each row is a help request. You should be able to do this by clicking on the filler text ("Row 1"), deleting it, then pasting what you copied from the txt file. The formatting should handle itself such that each row is one help request.
 7. Send the rating form to the participants. Tell them that they **_MUST_** use the same email address that they used to fill out the first form. _This system will break if they do not use the same email address. It doesn't have to be their Northwestern email, but it has to be the same spelling (different capitalization is ok)._
 8. Once they are done rating requests, link the results to a spreadsheet (DO NOT do this beforehand) and download the results as a CSV. Name this file `ratings.csv` and move it to the root folder of the repository. 
 9. Run the command `python hacky_compute_affinities.py` from the command line. The output will be `pairings.txt`. 
